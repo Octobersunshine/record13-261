@@ -18,6 +18,12 @@ AGG_MAP = {
     "mean": "mean",
 }
 
+INTERP_MAP = {
+    "linear": "linear",
+    "ffill": "ffill",
+    "forward": "ffill",
+}
+
 
 class ResampleService:
     def __init__(self, df: pd.DataFrame, time_col: str, value_col: str):
@@ -29,6 +35,34 @@ class ResampleService:
         self._df = df.copy()
         self._df[time_col] = pd.to_datetime(self._df[time_col])
         self._df = self._df.sort_values(time_col).set_index(time_col)
+        self._time_col = time_col
+        self._value_col = value_col
+
+    def interpolate(
+        self,
+        freq: str,
+        method: Literal["linear", "ffill", "forward"] = "linear",
+    ) -> pd.DataFrame:
+        method_code = INTERP_MAP.get(method)
+        if method_code is None:
+            raise ValueError(f"不支持的插值方式 '{method}'，可选: {list(INTERP_MAP.keys())}")
+
+        df = self._df
+        if df.index.tz is not None:
+            df = df.tz_convert("UTC")
+
+        full_index = pd.date_range(start=df.index.min(), end=df.index.max(), freq=freq)
+        reindexed = df.reindex(full_index)
+
+        if method_code == "linear":
+            interpolated = reindexed.interpolate(method="time")
+        else:
+            interpolated = reindexed.ffill()
+
+        interpolated.index.name = df.index.name or "time"
+        interpolated = interpolated.reset_index()
+        interpolated.columns = [self._time_col, self._value_col]
+        return interpolated
 
     def resample(
         self,
