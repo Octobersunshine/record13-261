@@ -43,8 +43,12 @@ class ResampleService:
         if agg_method is None:
             raise ValueError(f"不支持的聚合方式 '{agg}'，可选: {list(AGG_MAP.keys())}")
 
-        resampled = self._df.resample(freq_code)
+        df = self._df
+        if df.index.tz is not None:
+            df = df.tz_convert("UTC")
+
+        resampled = df.resample(freq_code)
         result = getattr(resampled, agg_method)()
         result = result.reset_index()
-        result.columns = [self._df.index.name or "time", self._df.columns[0]]
+        result.columns = [df.index.name or "time", df.columns[0]]
         return result
